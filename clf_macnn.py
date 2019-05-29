@@ -1,14 +1,21 @@
-import cv2
 import time
-import h5py
 import torch.optim
 import torch.nn as nn
 from torchvision import models
 import torch.nn.functional as F
+from data_macnn import test_loader
+from data_macnn import train_loader
 from torch.autograd import Variable
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
+
+
+# 超参数
+target_accuracy = 95.
+learning_rate = 1e-3
+input_channels = 1
+output_features = 6
+save_clf_name = 'clf.pth'
+part_model_name = 'part.pth'
+conv_model_name = 'conv.pth'
 
 
 class Part(nn.Module):
@@ -47,10 +54,10 @@ class Clf(nn.Module):
         super(Clf, self).__init__()
         self.res1 = models.resnet18()
         self.res1.conv1 = nn.Conv2d(256, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False).cuda()
-        self.res1.fc = nn.Linear(in_features=512, out_features=6, bias=True).cuda()
+        self.res1.fc = nn.Linear(in_features=512, out_features=output_features, bias=True).cuda()
         self.res2 = models.resnet18()
-        self.res2.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False).cuda()
-        self.res2.fc = nn.Linear(in_features=512, out_features=6, bias=True).cuda()
+        self.res2.conv1 = nn.Conv2d(input_channels, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False).cuda()
+        self.res2.fc = nn.Linear(in_features=512, out_features=output_features, bias=True).cuda()
 
     def forward(self, channels, attention):
         xc = self.res1(channels)
@@ -62,47 +69,14 @@ def get_channels(c, data):
     return c.layer3(c.layer2(c.layer1(c.maxpool(c.relu(c.bn1(c.conv1(data)))))))
 
 
-class BU3DDataset(Dataset):
-    def __init__(self, x, y):
-        super(BU3DDataset, self).__init__()
-        self.x = x
-        self.y = y
-
-    def __getitem__(self, index):
-        img = torch.tensor(cv2.resize(x[index], (448, 448))).float().unsqueeze(0)
-        label = y[index]
-        return img, label
-
-    def __len__(self):
-        return len(self.x)
-
-
-f = h5py.File('bu3d_features.h5')
-x, y = [], []
-for index, name in enumerate(f):
-    for file in f[name]:
-        x.append(f[name][file].value)
-        y.append(index)
-f.close()
-
-batch_size = 10
-learning_rate = 1e-3
-
-x, tx, y, ty = train_test_split(x, y, test_size=106/606, random_state=0)
-
-train_set = BU3DDataset(x, y)
-train_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
-test_set = BU3DDataset(tx, ty)
-test_loader = DataLoader(dataset=test_set, batch_size=batch_size, shuffle=True)
-
 clf = Clf().cuda()
 
 loss_fn = nn.CrossEntropyLoss()
 
 optimizer = torch.optim.RMSprop(clf.parameters(), lr = learning_rate)
 
-conv = torch.load('conv.pth')
-part = torch.load('part.pth')
+conv = torch.load(conv_model_name)
+part = torch.load(part_model_name)
 
 epoch = 0
 while True:
@@ -128,12 +102,12 @@ while True:
         acc += (torch.max(output, dim=1)[1]==label).sum()
         count += img.size(0)
     print(epoch, (int(acc)/count)*100,'%', time.asctime())
-    if (int(acc)/count)*100 > 95.:
-        torch.save(clf, 'clfd.pth')
+    if (int(acc)/count)*100 > target_accuracy:
+        torch.save(clf, save_clf_name)
         break
     epoch += 1
 
-chaos_matrix = torch.zeros((6, 6))
+chaos_matrix = torch.zeros((output_features, output_features))
 for data in test_loader:
     img, label = data
     img = Variable(img).cuda()
@@ -145,4 +119,4 @@ for data in test_loader:
     for (ix, iy) in zip(output, label):
         chaos_matrix[ix, iy] += 1
 
-chaos_matrix
+print(chaos_matrix)

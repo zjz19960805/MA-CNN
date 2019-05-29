@@ -1,14 +1,17 @@
-import cv2
 import time
-import h5py
 import torch.optim
 import torch.nn as nn
-from torchvision import models
 import torch.nn.functional as F
+from data_macnn import test_loader
+from data_macnn import train_loader
 from torch.autograd import Variable
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
+
+
+# 超参数
+epoch = 1
+learning_rate = 1e-3
+save_part_name = 'part.pth'
+conv_model_name = 'conv.pth'
 
 
 class Part(nn.Module):
@@ -71,44 +74,12 @@ class Loss(nn.Module):
             indexes.append([x, y])
         return indexes
 
+
 def get_channels(c, data):
     return c.layer3(c.layer2(c.layer1(c.maxpool(c.relu(c.bn1(c.conv1(data)))))))
 
 
-class BU3DDataset(Dataset):
-    def __init__(self, x, y):
-        super(BU3DDataset, self).__init__()
-        self.x = x
-        self.y = y
-
-    def __getitem__(self, index):
-        img = torch.tensor(cv2.resize(x[index], (448, 448))).float().unsqueeze(0)
-        label = y[index]
-        return img, label
-
-    def __len__(self):
-        return len(self.x)
-
-
-f = h5py.File('bu3d_features.h5')
-x, y = [], []
-for index, name in enumerate(f):
-    for file in f[name]:
-        x.append(f[name][file].value)
-        y.append(index)
-f.close()
-
-batch_size = 4
-learning_rate = 1e-3
-
-x, tx, y, ty = train_test_split(x, y, test_size=1/6, random_state=0)
-
-train_set = BU3DDataset(x, y)
-train_loader = DataLoader(dataset=train_set, batch_size=batch_size, shuffle=True)
-test_set = BU3DDataset(tx, ty)
-test_loader = DataLoader(dataset=test_set, batch_size=batch_size, shuffle=True)
-
-conv = torch.load('conv.pth')
+conv = torch.load(conv_model_name)
 
 part = Part().cuda()
 
@@ -116,7 +87,7 @@ loss_fn = Loss()
 
 optimizer = torch.optim.Adam(part.parameters(), lr = learning_rate)
 
-for epoch in range(1):
+for epoch_number in range(epoch):
     running_loss, count, acc = 0., 0, 0.
     print(time.asctime())
     for data in train_loader:
@@ -130,10 +101,10 @@ for epoch in range(1):
         optimizer.step()
         running_loss += loss.item()
         count += img.size(0)
-    print(epoch, count, running_loss, Loss.get_max_index(output))
+    print(epoch_number, count, running_loss, Loss.get_max_index(output))
 
 
-torch.save(part, 'part.pth')
+torch.save(part, save_part_name)
 
 count=0
 for data in test_loader:
