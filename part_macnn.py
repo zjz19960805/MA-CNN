@@ -57,6 +57,21 @@ class Loss(nn.Module):
             for j in range(tensor.size(1)):
                 for k in range(tensor.size(2)):
                     loss_sum += ((max_x - j) * (max_x - j) + (max_y - k) * (max_y - k)) * tensor[i, j, k]
+        '''
+        # Div
+        mgr = 0.
+        for data in x:
+            mgr += data.mean()
+        mgr /= len(x)
+        for i in range(x[0].size(0)):
+            for j in range(x[0].size(1)):
+                for k in range(x[0].size(2)):
+                    tensors = []
+                    for tensor in x:
+                        tensors.append(float(tensor[i, j, k]))
+                    for r in range(len(tensors)):
+                        loss_sum += tensors[r] * (max(tensors[:r] + tensors[r + 1:]) - mgr)
+        '''
         return loss_sum
 
     @staticmethod
