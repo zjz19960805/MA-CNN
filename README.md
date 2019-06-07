@@ -5,7 +5,7 @@ Multi-Attention-CNN
 + 论文作者GitHub地址 https://github.com/Jianlong-Fu/Multi-Attention-CNN  
 + 本项目的重点是全连接层聚类获得的**注意力矩阵**和**通道损失函数**  
 + 本项目主要用于图像中**细粒度特征**的识别和视频流中**关键帧**的提取  
-+ 本项目由**Pytorch**实现，只能运行在**GPU**上，先修改好数据集代码，再修改好神经网络代码头部的超参数之后按顺序运行就行了
++ 本项目由**Pytorch**实现，只能运行在**GPU**上
 ## 代码
 + data_macnn.py  
 对外提供数据接口，面对不同数据集需要修改继承于*Pytorch*数据相关模块的三个函数  
